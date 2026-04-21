@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-cyan: #00d2ff;
+  --color-editor-bg: #05070a;
+  --color-sidebar-bg: #0d1117;
+  --color-border-dim: #1f2937;
+  --color-card-bg: #161b22;
+  --color-ink: #e0e6ed;
+  --color-label: #6b7280;
+}
+
+@layer base {
+  body {
+    @apply bg-editor-bg text-ink;
+  }
+}
+
+/* Custom Range Slider Styling */
+input[type='range'].custom-range {
+  @apply appearance-none bg-border-dim h-1 rounded-sm outline-none;
+}
+
+input[type='range'].custom-range::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 rounded-full bg-brand-cyan cursor-pointer;
+  box-shadow: 0 0 10px #00d2ff;
+}
