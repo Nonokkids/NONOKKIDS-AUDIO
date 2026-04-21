@@ -99,38 +99,57 @@ export default function App() {
     setIsProcessedPlaying(!isProcessedPlaying);
   };
 
-  const handleProcess = async () => {
+  const handleProcess = async (mode: "review" | "download") => {
     if (!file) return;
 
     setIsProcessing(true);
     setStatus("idle");
+    if (mode === "review") setProcessedUrl(null);
 
     const formData = new FormData();
     formData.append("audio", file);
     formData.append("stretch", stretch.toString());
 
+    // Signal processing mode to user
+    const processStartTime = Date.now();
+
     try {
       const response = await fetch("/api/process-audio", {
         method: "POST",
         body: formData,
+        // Using a longer signal for mobile if needed, though fetch is usually persistent
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Unknown server error" }));
-        throw new Error(errorData.error || "Processing failed on server");
+        const errorData = await response.json().catch(() => ({ error: "Server connection failed" }));
+        throw new Error(errorData.error || "Processing failed");
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       
-      // Set result URL for review playback
       setProcessedUrl(url);
       setStatus("success");
+
+      if (mode === "download") {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `edited_${file.name.split(".")[0]}_320kbps.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
       
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Process Error:", err);
       setStatus("error");
-      setErrorMessage("Failed to process audio. Please try again.");
+      
+      // Better error messages for mobile
+      if (err.name === 'AbortError' || err.message.includes('timeout')) {
+        setErrorMessage("Connection timed out. Try a shorter clip.");
+      } else {
+        setErrorMessage(err.message || "Failed to process audio.");
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -167,44 +186,25 @@ export default function App() {
       <header className="h-[60px] bg-sidebar-bg border-b border-border-dim flex items-center justify-between px-6 shrink-0 relative z-20">
         <div className="flex items-center gap-3 text-brand-cyan font-bold tracking-wider text-sm uppercase">
           <AudioLines strokeWidth={2.5} className="w-5 h-5 flex-shrink-0" />
-          <span className="hidden sm:inline tracking-widest leading-none pt-0.5">NONOKKIDS AUDIO</span>
-          <span className="sm:hidden leading-none pt-0.5">NONOKKIDS</span>
+          <span className="hidden sm:inline tracking-widest leading-none pt-0.5 font-black">NONOKKIDS AUDIO</span>
+          <span className="sm:hidden leading-none pt-0.5 font-black">NONOKKIDS</span>
         </div>
-        <div className="bg-brand-cyan/10 text-brand-cyan px-3 py-1 rounded-full text-[10px] sm:text-[11px] border border-brand-cyan/30 uppercase font-medium truncate max-w-[150px] sm:max-w-none">
-          Engine: iZotope Radius v4.2
+        <div className="bg-brand-cyan/10 text-brand-cyan px-3 py-1 rounded-full text-[10px] sm:text-[11px] border border-brand-cyan/30 uppercase font-bold truncate max-w-[150px] sm:max-w-none">
+          SYSTEM_STABLE: V4.5
         </div>
       </header>
 
       <main className="flex-1 flex flex-col md:grid md:grid-cols-[320px_1fr] bg-border-dim overflow-hidden">
         {/* Sidebar */}
-        <aside className="bg-sidebar-bg p-6 flex flex-col gap-6 md:gap-8 overflow-y-auto border-b md:border-b-0 md:border-r border-border-dim shrink-0">
-          {/* Section: Parameters */}
-          <div className="hidden md:block">
-            <span className="text-[10px] uppercase text-label tracking-[0.2em] mb-4 block font-bold">Algorithm Parameters</span>
-            <div className="flex flex-col gap-3">
-              <div className="bg-card-bg p-3 rounded-lg border border-border-dim">
-                <span className="text-[10px] text-label block mb-1 uppercase font-medium">Algorithm Mode</span>
-                <span className="text-sm font-mono font-semibold text-gray-200">iZotope Radius High</span>
-              </div>
-              <div className="bg-card-bg p-3 rounded-lg border border-border-dim">
-                <span className="text-[10px] text-label block mb-1 uppercase font-medium">Pitch Coherence</span>
-                <span className="text-sm font-mono font-semibold text-gray-200">1.00</span>
-              </div>
-              <div className="bg-card-bg p-3 rounded-lg border border-border-dim">
-                <span className="text-[10px] text-label block mb-1 uppercase font-medium">Precision Level</span>
-                <span className="text-sm font-mono font-semibold text-gray-200">High (Intensive)</span>
-              </div>
-            </div>
-          </div>
-
+        <aside className="bg-sidebar-bg p-5 flex flex-col gap-5 md:gap-8 overflow-y-auto border-b md:border-b-0 md:border-r border-border-dim shrink-0">
           {/* Section: Controls */}
           <div className="space-y-4">
-            <span className="text-[10px] uppercase text-label tracking-[0.2em] mb-4 block font-bold">Dynamic Manipulation</span>
+            <span className="text-[10px] uppercase text-label tracking-[0.2em] mb-4 block font-black">Dynamic Controls</span>
             
-            <div className="space-y-4">
-              <div className="flex justify-between text-xs text-gray-400 font-medium font-mono">
+            <div className="space-y-5">
+              <div className="flex justify-between text-xs text-gray-400 font-bold font-mono">
                 <span>STRETCH / PITCH LINK</span>
-                <span className="text-brand-cyan">{stretch.toFixed(2)}x</span>
+                <span className="text-brand-cyan bg-brand-cyan/10 px-2 py-0.5 rounded border border-brand-cyan/20">{stretch.toFixed(2)}x</span>
               </div>
               <input 
                 type="range" 
@@ -213,80 +213,113 @@ export default function App() {
                 step="0.01" 
                 value={stretch}
                 onChange={(e) => setStretch(parseFloat(e.target.value))}
-                className="custom-range w-full"
+                className="custom-range w-full h-8"
               />
-              <div className="flex justify-center relative py-2 md:py-4">
-                <div className="bg-editor-bg p-2 rounded-full border border-brand-cyan/50 text-brand-cyan shadow-[0_0_15px_rgba(0,210,255,0.2)]">
+              <div className="flex justify-center relative py-1 md:py-2">
+                <div className="bg-editor-bg p-2 rounded-full border border-brand-cyan/50 text-brand-cyan shadow-[0_0_20px_rgba(0,210,255,0.25)] animate-pulse">
                   <LinkIcon className="w-5 h-5" />
                 </div>
               </div>
-              <p className="text-[10px] text-label text-center leading-relaxed hidden md:block">
-                Pitch is locked to sample rate resampling<br/>for phase coherence preservation.
+              <p className="text-[10px] text-label text-center leading-relaxed font-medium hidden md:block">
+                Locking resample rate for phase perfect<br/>transposition and scaling.
               </p>
             </div>
           </div>
 
-          {/* Section: Export Info - Mobile optimized */}
-          <div className="mt-auto pt-4 md:pt-6 md:border-t border-border-dim">
-            <span className="text-[10px] uppercase text-label tracking-[0.2em] mb-4 block font-bold hidden md:block">Export Preferences</span>
-            <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
-              {[
-                { label: "Sample Rate", value: "44.1 kHz" },
-                { label: "Bitrate", value: "320 kbps" }
-              ].map((item, i) => (
-                <div key={i} className="bg-card-bg p-2 md:p-3 rounded-lg border border-border-dim">
-                  <span className="text-[9px] md:text-[10px] text-label block mb-0.5 uppercase">{item.label}</span>
-                  <span className="text-[10px] md:text-[11px] font-mono font-bold text-gray-200">{item.value}</span>
-                </div>
-              ))}
-            </div>
+          {/* Section: Action Options */}
+          <div className="mt-2 space-y-3">
+            <span className="text-[10px] uppercase text-label tracking-[0.2em] mb-3 block font-black">Execution Engine</span>
+            
+            {/* OPTION 1: REVIEW */}
+            <button
+              disabled={!file || isProcessing}
+              onClick={() => handleProcess("review")}
+              className={`
+                w-full py-3.5 rounded-xl font-black uppercase tracking-[0.15em] text-[10px] shadow-lg transition-all flex flex-col items-center justify-center gap-1 group
+                ${!file || isProcessing 
+                  ? "bg-border-dim text-label cursor-not-allowed opacity-50" 
+                  : "bg-white/5 text-ink border border-white/10 hover:bg-white/10 hover:border-brand-cyan/50 active:scale-95"}
+              `}
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin text-brand-cyan" />
+              ) : (
+                <Play className="w-4 h-4 text-brand-cyan group-hover:scale-110 transition-transform" />
+              )}
+              <span>Review Results First</span>
+            </button>
+
+            {/* OPTION 2: DIRECT DOWNLOAD */}
+            <button
+              disabled={!file || isProcessing}
+              onClick={() => handleProcess("download")}
+              className={`
+                w-full py-4 rounded-xl font-black uppercase tracking-[0.15em] text-[10px] shadow-xl transition-all flex flex-col items-center justify-center gap-1
+                ${!file || isProcessing 
+                  ? "bg-border-dim text-label cursor-not-allowed opacity-50" 
+                  : "bg-brand-cyan text-editor-bg hover:shadow-brand-cyan/40 hover:brightness-110 active:scale-95 shadow-[0_4px_20px_rgba(0,210,255,0.15)]"}
+              `}
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>Direct Export MP3</span>
+            </button>
           </div>
 
-          {/* Action Button */}
-          <button
-            disabled={!file || isProcessing}
-            onClick={handleProcess}
-            className={`
-              w-full py-4 rounded-lg font-bold uppercase tracking-wider text-xs shadow-lg transition-all flex-shrink-0
-              ${!file || isProcessing 
-                ? "bg-border-dim text-label cursor-not-allowed border border-border-dim" 
-                : "bg-brand-cyan text-editor-bg hover:opacity-90 hover:scale-[1.01] active:scale-[0.99] shadow-brand-cyan/20"}
-            `}
-          >
-            {isProcessing ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Generating Review...</span>
+          <div className="mt-auto hidden md:block">
+            <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+              <span className="text-[9px] text-label uppercase font-black block mb-2 tracking-widest">System Load</span>
+              <div className="w-full bg-editor-bg h-1 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full bg-brand-cyan transition-all duration-1000 ${isProcessing ? 'w-[80%]' : 'w-[5%]'}`}
+                ></div>
               </div>
-            ) : (
-              <div className="flex items-center justify-center gap-2">
-                <Activity className="w-4 h-4" />
-                <span>APPLY & REVIEW CHANGES</span>
-              </div>
-            )}
-          </button>
+            </div>
+          </div>
         </aside>
 
         {/* Editor View */}
-        <section className="bg-editor-bg p-4 md:p-8 flex flex-col justify-center overflow-y-auto relative min-h-0 flex-grow">
+        <section className="bg-editor-bg p-4 md:p-8 flex flex-col justify-start md:justify-center overflow-y-auto relative min-h-0 flex-grow">
           {/* Main Waveform Display */}
-          <div className="h-[180px] md:h-[280px] bg-brand-cyan/[0.02] border border-dashed border-border-dim rounded-xl flex items-center justify-center relative mb-6 md:mb-8 flex-shrink-0">
+          <div className="h-[140px] md:h-[280px] bg-brand-cyan/[0.03] border border-border-dim rounded-2xl flex items-center justify-center relative mb-6 md:mb-8 flex-shrink-0 overflow-hidden shadow-inner">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,210,255,0.05)_0%,transparent_70%)]"></div>
             <svg 
-              className="w-[90%] h-[80px] md:h-[120px] stroke-brand-cyan opacity-60 transition-all duration-300"
+              className={`w-[95%] h-[80px] md:h-[120px] stroke-brand-cyan transition-all duration-300 ${isPlaying || isProcessedPlaying ? 'opacity-80 scale-105' : 'opacity-40'}`}
               style={{ strokeWidth: 2, strokeLinecap: 'round' }}
               viewBox="0 0 1000 100"
               fill="none"
             >
-              <path d="M0 50 Q 10 20 20 50 T 40 50 T 60 50 T 80 50 T 100 50 T 120 50 T 140 50 T 160 50 T 180 50 T 200 50 T 220 10 T 240 90 T 260 50 T 280 50 T 300 10 T 320 90 T 340 50 T 360 50 T 380 50 T 400 50 T 420 50 T 440 20 T 460 80 T 480 50 T 500 50 T 520 50 T 540 50 T 560 50 T 580 50 T 600 50 T 620 10 T 640 90 T 660 50 T 680 50 T 700 10 T 720 90 T 740 50 T 760 50 T 780 50 T 800 50 T 820 50 T 840 20 T 860 80 T 880 50 T 900 50 T 920 50 T 940 50 T 960 50 T 980 50 T 1000 50" />
+              <motion.path 
+                animate={{ 
+                  d: isPlaying || isProcessedPlaying 
+                    ? "M0 50 Q 10 0 20 50 T 40 50 T 60 50 T 80 50 T 100 50 T 120 10 T 140 90 T 160 50 T 180 50 T 200 50 T 220 0 T 240 100 T 260 50 T 280 50 T 300 0 T 320 100 T 340 50 T 360 50 T 380 50 T 400 50 T 420 50 T 440 0 T 460 100 T 480 50 T 500 50 T 520 50 T 540 50 T 560 50 T 580 50 T 600 50 T 620 0 T 640 100 T 660 50 T 680 50 T 700 0 T 720 100 T 740 50 T 760 50 T 780 50 T 800 50 T 820 50 T 840 0 T 860 100 T 880 50 T 900 50 T 920 50 T 940 50 T 960 50 T 980 50 T 1000 50"
+                    : "M0 50 Q 10 40 20 50 T 40 50 T 60 50 T 80 50 T 100 50 T 120 50 T 140 50 T 160 50 T 180 50 T 200 50 T 220 45 T 240 55 T 260 50 T 280 50 T 300 45 T 320 55 T 340 50 T 360 50 T 380 50 T 400 50 T 420 50 T 440 45 T 460 55 T 480 50 T 500 50 T 520 50 T 540 50 T 560 50 T 580 50 T 600 50 T 620 45 T 640 55 T 660 50 T 680 50 T 700 45 T 720 55 T 740 50 T 760 50 T 780 50 T 800 50 T 820 50 T 840 45 T 860 55 T 880 50 T 900 50 T 920 50 T 940 50 T 960 50 T 980 50 T 1000 50"
+                }}
+                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                d="M0 50 L 1000 50"
+              />
             </svg>
-            <div className="absolute bottom-4 left-4 md:left-6 font-mono text-[10px] md:text-xs text-brand-cyan tracking-widest bg-editor-bg/80 px-2 py-1 rounded border border-brand-cyan/20">
-              {file ? "LIVE_INPUT_SYNC" : "NO_DATA_STREAM"}
+            <div className="absolute top-4 right-4 flex gap-2">
+              <div className={`w-2 h-2 rounded-full ${isProcessing ? 'bg-orange-500 animate-ping' : isPlaying || isProcessedPlaying ? 'bg-green-500 animate-pulse' : 'bg-white/20'}`}></div>
+            </div>
+            <div className="absolute bottom-4 left-4 md:left-6 font-mono text-[9px] md:text-xs text-brand-cyan tracking-widest bg-editor-bg/90 border border-brand-cyan/30 px-3 py-1 rounded shadow-lg backdrop-blur-sm">
+              {file ? "I/O_BUF_STABLE" : "SIGNAL_LOST"}
             </div>
             
             {!file && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-editor-bg/40 backdrop-blur-[2px] rounded-xl">
-                <Activity className="w-8 h-8 text-label mb-2 animate-pulse" />
-                <span className="text-[10px] text-label font-mono uppercase tracking-widest">Connect Sound Source</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-editor-bg/60 backdrop-blur-[4px] rounded-xl">
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 10, ease: "linear" }}>
+                  <Activity className="w-10 h-10 text-white/20 mb-4" />
+                </motion.div>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-brand-cyan text-editor-bg px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                >
+                  INITIALIZE LOAD
+                </button>
               </div>
             )}
           </div>
