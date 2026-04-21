@@ -346,7 +346,7 @@ export default function App() {
                 type="file" 
                 ref={fileInputRef} 
                 onChange={handleFileChange} 
-                accept="audio/*" 
+                accept=".mp3,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aiff,audio/x-aiff,audio/flac,audio/ogg" 
                 className="hidden" 
               />
             </div>
